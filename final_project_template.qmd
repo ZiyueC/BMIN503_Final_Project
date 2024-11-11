@@ -1,7 +1,7 @@
 ---
 title: "Your Title"
 subtitle: "BMIN503/EPID600 Final Project"
-author: "FirstName LastName"
+author: "Chen Ziyue"
 format: html
 editor: visual
 number-sections: true
@@ -16,11 +16,27 @@ Use this template to complete your project throughout the course. Your Final Pro
 
 Give a brief a description of your project and its goal(s), what data you are using to complete it, and what two faculty/staff in different fields you have spoken to about your project with a brief summary of what you learned from each person. Include a link to your final project GitHub repository.
 
+This project examines racial inequalities in the treatment and outcomes of sepsis patients within the ICU. Specifically, it investigates whether White and Non-White patients experience the same benefits from ICU interventions like mechanical ventilation (MV), renal replacement therapy (RRT), and vasopressors (VP) across varying levels of illness severity. The study's goals are to identify potential disparities in treatment and outcomes, understand the impact of social race constructs on medical decisions, and ultimately encourage improvements in equitable care practices in critical care settings.
+
+To achieve these goals, the project uses data from the MIMIC-IV and eICU Collaborative Research Databases, which are large, publicly available ICU datasets containing de-identified patient records. The datasets include demographic information, clinical variables, ICU interventions, and in-hospital mortality outcomes, allowing the research team to conduct a retrospective analysis and identify treatment patterns and mortality outcomes across racial groups.
+
 ## Introduction {#sec-introduction}
 
 Describe the problem addressed, its significance, and some background to motivate the problem. This should extend what is in the @sec-overview.
 
 Explain why your problem is interdisciplinary, what fields can contribute to its understanding, and incorporate background related to what you learned from meeting with faculty/staff.
+
+The problem addressed in this study is the presence of racial inequalities in the treatment of sepsis patients within Intensive Care Units (ICUs), focusing on disparities in the administration and effects of critical interventions like mechanical ventilation (MV), renal replacement therapy (RRT), and vasopressors (VP). While sepsis is a life-threatening condition that requires urgent and complex care, treatment practices can differ widely across racial groups, potentially leading to unequal outcomes. Specifically, the study investigates whether the interventions that are standard in critical care are equally effective and equitably applied to both White and Non-White patients. Given that racial disparities have been previously documented in ICU settings, examining this issue in the context of sepsis care highlights the urgency of understanding and addressing potential biases in medical treatment.
+
+The significance of this problem is substantial because sepsis is a leading cause of mortality worldwide, particularly among critically ill patients. Inconsistent or biased treatment approaches can exacerbate health disparities and negatively impact survival rates among historically marginalized groups. Recognizing and mitigating such inequalities are crucial to improving patient outcomes and advancing health equity in healthcare systems. The findings of this study could inform clinical guidelines and policy decisions to ensure that ICU interventions are applied equitably, regardless of social constructs like race.
+
+This research is interdisciplinary, drawing from fields such as:
+
+1.  **Healthcare and Medicine**: Critical care medicine and sepsis management provide the clinical basis for understanding the interventions and outcomes assessed in this study.
+
+2.  **Epidemiology and Public Health**: The study uses population-level data and statistical methods to identify patterns of care, making it relevant to public health experts concerned with health disparities.
+
+3.  **Data Science and Bioinformatics**: Working with large databases like MIMIC-IV and eICU requires expertise in data science and bioinformatics for data processing, integration, and advanced statistical analyses.
 
 ## Methods {#sec-methods}
 

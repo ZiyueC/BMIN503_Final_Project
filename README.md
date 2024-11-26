@@ -2,6 +2,20 @@
 
 Test for the assignment 6 (HW6)
 
+The files in this repo:
+.HTML: the main report
+.QMD: the codes
+/data: store some intermediate and cleaned data for future use and secondary use
+
+
+
+
+
+
+
+
+
+
 This repository contains templates for the final written report and GitHub repository. Follow the instructions below to clone this repository, and then turn in your final project's code via a pull request to this repository.
 
 1. To start, **fork** this BMIN503_Final_Project repository.

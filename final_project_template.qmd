@@ -42,6 +42,31 @@ This research is interdisciplinary, drawing from fields such as:
 
 Describe the data used and general methodological approach used to address the problem described in the @sec-introduction. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why.
 
+### Data Sources and Approach
+
+This study analyzes sepsis-related data from two publicly available ICU datasets: MIMIC-IV and eICU-CRD, which include de-identified patient information and physiological data.
+
+-   **Cohort Selection**:
+    -   Patients aged 18+ diagnosed with sepsis (per Angus code-based definition).
+    -   Only first-time ICU stays included.
+    -   Cases missing race information or discharge location excluded.
+-   **Covariates**: Variables include:
+    -   Demographics: age, sex, race.
+    -   Clinical scores: Sequential Organ Failure Assessment (SOFA), Oxford Acute Severity of Illness Score (OASIS), Charlson Comorbidity Index (CCI).
+    -   Treatments: Mechanical Ventilation (MV), Renal Replacement Therapy (RRT), and Vasopressors (VP).
+    -   Comorbidities: hypertension, COPD, asthma, heart failure, chronic kidney disease.
+
+------------------------------------------------------------------------
+
+### Analysis Plan
+
+1.  **Statistical Models**:
+    -   Logistic regression to assess treatment likelihood based on race.
+    -   Targeted Maximum Likelihood Estimation (TMLE) to evaluate Average Treatment Effect (ATE).
+2.  **Software and Code**:
+    -   **R version 4.2.2** and **Python 3.10.9** were used.
+    -   The TMLE analysis pipeline in R:
+
 ## Results {#sec-results}
 
 Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.

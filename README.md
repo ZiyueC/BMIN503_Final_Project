@@ -1,15 +1,23 @@
 # BMIN503/EPID600 Final Project
 
-Test for the assignment 6 (HW6)
+## Repository Structure
 
-The files in this repo:
-.HTML: the main report
-.QMD: the codes
-/data: store some intermediate and cleaned data for future use and secondary use
+- **`main_report.html`**: The main report summarizing the analysis and results.
+- **`main_report.qmd`**: The Quarto document containing the R code and explanations used to generate the main report.
+- **`data/`**: Directory to store intermediate and cleaned datasets for future and secondary use.
+
+## Usage Instructions
+
+1. **HTML Report**: Open the `main_report.html` in a browser to view the analysis results and discussion.
+2. **Code**: Refer to the `.qmd` file for the full workflow, including data cleaning, analysis, and visualization steps.
+3. **Data Directory**: 
+   - Contains intermediate processed data used during analysis.
+   - Useful for extending the analysis or secondary research.
 
 
 
 
+---------------------------------------
 
 
 

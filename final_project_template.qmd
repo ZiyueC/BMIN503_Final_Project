@@ -65,7 +65,56 @@ This study analyzes sepsis-related data from two publicly available ICU datasets
     -   Targeted Maximum Likelihood Estimation (TMLE) to evaluate Average Treatment Effect (ATE).
 2.  **Software and Code**:
     -   **R version 4.2.2** and **Python 3.10.9** were used.
+
     -   The TMLE analysis pipeline in R:
+
+```{r}
+        ## Some demo R code (need update)
+
+        # Install necessary packages
+        required_packages <- c("tmle", "SuperLearner", "dplyr", "ggplot2", "tidyr")
+
+        # Install missing packages
+        new_packages <- required_packages[!(required_packages %in% installed.packages()[, "Package"])]
+        if (length(new_packages) > 0) install.packages(new_packages)
+
+        # Load the packages
+        lapply(required_packages, library, character.only = TRUE)
+
+```
+```{r}
+        ## Some demo R code (need update and clean)
+
+        # Load necessary libraries
+        library(tmle)
+        library(SuperLearner)
+        
+        # Example data setup
+        set.seed(123)
+        n <- 1000
+        data <- data.frame(
+          A = rbinom(n, 1, 0.5),  # Treatment variable
+          Y = rnorm(n, 2, 1),     # Outcome variable
+          W1 = runif(n, 0, 1),    # Covariate 1
+          W2 = runif(n, 0, 1)     # Covariate 2
+        )
+        
+        # TMLE model
+        #tmle_fit <- tmle(
+        #  Y = data$Y,
+        #  A = data$A,
+        #  W = data[, c("W1", "W2")],
+        #  family = gaussian(),
+        #  Q.SL.library = c("SL.glm", "SL.mean"),
+        #  g.SL.library = c("SL.glm", "SL.mean")
+        #)
+        
+        # Summarize the results
+        #summary(tmle_fit)
+
+
+```
+
 
 ## Results {#sec-results}
 

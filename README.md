@@ -2,7 +2,7 @@
 
 ## Repository Structure
 
-- **`main_report.html`**: The main report summarizing the analysis and results.
+- **`main_report.html`**: The main report summarizing the analysis and results. (will change the file name after we finalize the report/codes)
 - **`main_report.qmd`**: The Quarto document containing the R code and explanations used to generate the main report.
 - **`data/`**: Directory to store intermediate and cleaned datasets for future and secondary use.
 

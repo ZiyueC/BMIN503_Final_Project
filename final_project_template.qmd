@@ -38,15 +38,26 @@ This research is interdisciplinary, drawing from fields such as:
 
 3.  **Data Science and Bioinformatics**: Working with large databases like MIMIC-IV and eICU requires expertise in data science and bioinformatics for data processing, integration, and advanced statistical analyses.
 
+
+
+### three kind of intervention, reference, increasing usage rate, 
+
+
+
+
+
+
+
+
 ## Methods {#sec-methods}
 
 Describe the data used and general methodological approach used to address the problem described in the @sec-introduction. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why.
 
 ### Data Sources and Approach
 
-This study analyzes sepsis-related data from two publicly available ICU datasets: MIMIC-IV and eICU-CRD, which include de-identified patient information and physiological data.
+This study analyzes sepsis-related data from two publicly available ICU datasets: MIMIC-IV and eICU-CRD (eICU-CRD will be used only for validation and the main analysis in this file is MIMIC-IV data - we are planing to include more external validation data in the future - but due to the time limit, we will only present the results from MIMIC inside this file - we focus more on the methodology and pipeline not the single "accuracy" or single "result" - and you may see the github keep updating after this course ends), which include de-identified patient information and physiological data.
 
--   **Cohort Selection**:
+-   **Cohort Selection (we will see more inclusion/exclusion criteria in the results section)**:
     -   Patients aged 18+ diagnosed with sepsis (per Angus code-based definition).
     -   Only first-time ICU stays included.
     -   Cases missing race information or discharge location excluded.
@@ -58,68 +69,884 @@ This study analyzes sepsis-related data from two publicly available ICU datasets
 
 ------------------------------------------------------------------------
 
-### Analysis Plan
+### Analysis Pipeline
 
-1.  **Statistical Models**:
+1.  **Data Preparation**:
+    -   Extraction,
+    -   Cleaning,
+    -   Transformation,
+    -   EDA
+2.  **Statistical Models**:
     -   Logistic regression to assess treatment likelihood based on race.
     -   Targeted Maximum Likelihood Estimation (TMLE) to evaluate Average Treatment Effect (ATE).
-2.  **Software and Code**:
-    -   **R version 4.2.2** and **Python 3.10.9** were used.
+3.  **Package and Software**
+    -   **R version 4.2.1**
 
-    -   The TMLE analysis pipeline in R:
+    -   libraries introduction:
+
+Now, we start our analysis - we will include the necessary codes and steps and explanation of the codes. For some graph and figures - we will have instant feedback and explanation and short insights. We will review the important figures and tables in the Result section with more discussion and insights.
 
 ```{r}
-        ## Some demo R code (need update)
+### library preparation
 
-        # Install necessary packages
-        required_packages <- c("tmle", "SuperLearner", "dplyr", "ggplot2", "tidyr")
-
-        # Install missing packages
-        new_packages <- required_packages[!(required_packages %in% installed.packages()[, "Package"])]
-        if (length(new_packages) > 0) install.packages(new_packages)
-
-        # Load the packages
-        lapply(required_packages, library, character.only = TRUE)
-
-```
-```{r}
-        ## Some demo R code (need update and clean)
-
-        # Load necessary libraries
-        library(tmle)
-        library(SuperLearner)
-        
-        # Example data setup
-        set.seed(123)
-        n <- 1000
-        data <- data.frame(
-          A = rbinom(n, 1, 0.5),  # Treatment variable
-          Y = rnorm(n, 2, 1),     # Outcome variable
-          W1 = runif(n, 0, 1),    # Covariate 1
-          W2 = runif(n, 0, 1)     # Covariate 2
-        )
-        
-        # TMLE model
-        #tmle_fit <- tmle(
-        #  Y = data$Y,
-        #  A = data$A,
-        #  W = data[, c("W1", "W2")],
-        #  family = gaussian(),
-        #  Q.SL.library = c("SL.glm", "SL.mean"),
-        #  g.SL.library = c("SL.glm", "SL.mean")
-        #)
-        
-        # Summarize the results
-        #summary(tmle_fit)
+library(dplyr)
+library(table1)
+#library(gtsummary)
+library(ggplot2)
+library(tidyverse)
 
 
 ```
 
+```{r}
+### load the data
 
+data <- read.csv("data/MIMIC_Raw.csv")
+print(nrow(data))
+
+# we have 76540 patients in the raw data
+
+```
+
+We can have a look of the colnames - for which varible we will investigate.
+
+```{r}
+### 
+#colnames(data) # directly print will generate so many rows - save space
+cat(strwrap(paste(colnames(data), collapse = ", "), width = 80), sep = "\n")
+
+```
+
+From the MIMIC documentation, https://physionet.org/content/mimiciv/3.1/, we are able to identify some interesting and useful variables from the colnames. For example, at the begining, our Y variable-mortality is the "hospital_expire_flag" (although in the practise we may need some modifications, for example, we may also count those patients discharge to hospiece also be death in the practical cliical setting). Another important variable is the "ethnicity". Recall we are trying to compare the disparity between differnet race/ethnicity group and their chance to receive the medical treatment (ventilation, dialysis, vasopressor, etc. ). Finally, we can identify those treatment/intervention types inside the database. For example, the "pressor" indicate whether this patient is use pressor or not. It can be directly use as a (or via a quick transfrom) into a binary variable to indicate the patient intervention status. However, for the variable "InvasiveVent_hr" is only output the machenical ventialtion usage (so if this is zero that means this patient do not use mechanical ventilation in this ICU visit), which will require more work to tranform into a useful binary variable (for our analysis).
+
+```{r}
+### Now we start the exclusion/inclusion side
+
+data$sepsis3 <- ifelse(is.na(data$sepsis3), "Non-Sepsis3", "Sepsis3")
+sepsis3_count <- as.data.frame(table(data$sepsis3))
+
+data <- data |> 
+  filter(sepsis3 == "Sepsis3")
+cat("Number of rows in filtered data (only sepsis3 cohort):", nrow(data), "\n")
+
+
+```
+
+Those numbers, 76540 to 34789 (after we remove the non-sepsis 3 people) will be used to generate our figure 1. Here we use the definition of sepsis3 from "The Third International Consensus Definitions for Sepsis and Septic Shock (Sepsis-3)" paper(https://jamanetwork.com/journals/jama/fullarticle/2492881). We save the sepsis3_count for further analysis (in the next code block).
+
+```{r}
+### 
+colnames(sepsis3_count) <- c("Sepsis3_Status", "Count")
+
+ggplot(sepsis3_count, aes(x = Sepsis3_Status, y = Count, fill = Sepsis3_Status)) +
+  geom_bar(stat = "identity", width = 0.6, show.legend = FALSE) +
+  geom_text(aes(label = Count), vjust = -0.3, size = 5, color = "black", fontface = "bold") +
+  labs(
+    title = "Comparison of Sepsis3 and Non-Sepsis3 Patients",
+    x = "Sepsis3 Status",
+    y = "Number of Patients",
+    caption = "Data source: MIMIC-IV"
+  ) +
+  scale_fill_manual(values = c("skyblue3", "tomato3")) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.x = element_text(face = "bold", size = 14),
+    axis.title.y = element_text(face = "bold", size = 14),
+    axis.text = element_text(size = 12)
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  coord_cartesian(clip = "off")
+
+rm(sepsis3_count)
+
+```
+
+Next we want to exclude those patients with less than 24 hour ICU length of stay, or greater than 30days, from some clinical insights and experience(Please notice this is a new added rule in the exclusion/inclusion part, so the preliminary results have slighted change after the 2 weeks ago final presentation). From the initial visualization (the next cell block), most ICU stays are from 1 day to 5 days.
+
+```{r}
+### only for visulization
+filtered_data <- data |> 
+  filter(los_icu >= 0 & los_icu <= 40)
+
+# Generate the enhanced histogram for the filtered data
+ggplot(filtered_data, aes(x = los_icu)) +
+  geom_histogram(binwidth = 1, fill = "skyblue3", color = "white", alpha = 0.9) +
+  labs(
+    title = "Distribution of ICU Stay Lengths (0-40 Days)",
+    x = "Length of ICU Stay (Days)",
+    y = "Number of Patients",
+    caption = "Data source: MIMIC-IV"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title.x = element_text(face = "bold", size = 14),
+    axis.title.y = element_text(face = "bold", size = 14),
+    axis.text = element_text(size = 12),
+    panel.grid.major = element_line(color = "gray85", linetype = "dashed"),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_x_continuous(breaks = seq(0, 40, by = 5)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  coord_cartesian(clip = "off")
+
+rm(filtered_data)
+
+```
+
+```{r}
+### 
+data <- data |> 
+  filter(los_icu >= 1 & los_icu <= 30)
+
+cat("Number of rows in filtered data (reasonable icu stays):", nrow(data), "\n")
+```
+
+The next step we want to investigate those non-first ICU stay (the recurrent ICU stay), still based on prior clinical insights and experience.
+
+```{r}
+### 
+print(table(data$first_icu_stay))
+data <- data |> 
+  filter(first_icu_stay == TRUE)
+cat("Number of rows in filtered data (first ICU stay):", nrow(data), "\n")
+```
+
+The next step is to analyze and include/exclude the ethnicity and race information. As we previous explore, this information in saved in the "ethnciity" column. Recall this project is aim to check the equity and disparities between different race and ethcnitie groups, and their chance to get the treatments and interventions. Have a further claearificationa nd invertigation is necessary.
+
+```{r}
+### 
+ethnicity_count <- data |> 
+  count(ethnicity) |> 
+  mutate(percentage = n / sum(n) * 100)
+
+
+ggplot(ethnicity_count, aes(x = ethnicity, y = n, fill = ethnicity)) +
+  geom_bar(stat = "identity", show.legend = FALSE, width = 0.7) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), vjust = -0.3, size = 4, fontface = "bold", color = "black") +
+  labs(
+    title = "Distribution of Ethnicity with Percentages",
+    x = "Ethnicity",
+    y = "Number of Patients",
+    caption = "Data source: MIMIC-IV"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title.x = element_text(face = "bold", size = 14),
+    axis.title.y = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    panel.grid.major = element_line(color = "gray85", linetype = "dashed"),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))
+
+rm(ethnicity_count)
+```
+
+We remove those "others" "unknown" and "unable to obtain" information in the ethncity, since we want our comparison be as accruate as possible - that is the truth of data cleaning.
+
+```{r}
+### 
+data <- data |> 
+  filter(!(ethnicity %in% c("UNABLE TO OBTAIN", "UNKNOWN", "OTHER")))
+
+cat("Number of rows in filtered data (with available ethnicity info):", nrow(data), "\n")
+```
+
+Finally, we can save our data into a cleaned data (for the further analysis). Further analyssi do not need to redo all the icnlusion-exclusion criteria.
+
+Some supplementary notes on why we do not set exclusion creiteria for the missingd ata part. The main reason is due to the unique structure how they record the raw data. For example, like what we mention before, the main variable, "pressor" which means use pressor in the treatment or not - those patient with vasopressor is "True" where the NA value directly indicate a "False" - although not explicitly record in the dataset. Later in the analysis we need to one more step to set this as a binary variable and hence we do not do the missing data removal in the inclusion/exclusion steps. (After we check the documentation for each variables)
+
+```{r}
+### 
+write.csv(data, "data/MIMIC_Clean.csv", row.names = FALSE)
+```
+
+Based on our clean data, we can do more EDA - explortory data analysis. The first step we are more interest in the race/ethnicity distribution, after we remove the "others", "unable to obtain", etc.
+
+```{r}
+### 
+ethnicity_count <- data |> 
+  count(ethnicity) |> 
+  mutate(percentage = n / sum(n) * 100)
+
+# Create the enhanced pie chart
+pie_chart <- ggplot(ethnicity_count, aes(x = "", y = percentage, fill = ethnicity)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y", start = 0) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 4, color = "white", fontface = "bold") +
+  labs(
+    title = "Ethnicity Distribution (Pie Chart)",
+    caption = "Data source: MIMIC-IV"
+  ) +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    legend.title = element_text(face = "bold", size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+# Display the pie chart
+print(pie_chart)
+
+
+
+```
+
+White people still dominating - 80.3%, that is the main reason why in the later analysis we choose to compare White people versus non-White people, since if we do individual paired comparison - for example, white versus black, it will not be that statistical sigfnicianit. By the way, I believe the white dominating the data distribution is because MIMIC data based on USA-if more specificity, Boston. due the raw data distirbution and bias it is hard to find a balanced dataset - happy to do more about this part in the external validation steps in the future. For example, we can integrate some dataset from a more diverse area, or integrtae some plain Asian database inside. But data inetrgation will be another pain - especially in the clinical standards and intropebility.
+
+```{r}
+### 
+bar_chart <- ggplot(ethnicity_count, aes(x = ethnicity, y = n, fill = ethnicity)) +
+  geom_bar(stat = "identity", show.legend = FALSE, width = 0.7, color = "white") +
+  geom_text(aes(label = n), vjust = -0.3, size = 4, fontface = "bold", color = "black") +
+  labs(
+    title = "Ethnicity Distribution (Bar Chart)",
+    x = "Ethnicity",
+    y = "Number of Patients",
+    caption = "Data source: MIMIC-IV"
+  ) +
+  scale_fill_brewer(palette = "Pastel1") +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title.x = element_text(face = "bold", size = 14),
+    axis.title.y = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    panel.grid.major = element_line(color = "gray85", linetype = "dashed"),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))
+
+print(bar_chart)
+
+rm(ethnicity_count)
+
+```
+
+The above barplot more directly show the reason why we cannot do paired comparison. The next step is the more detailed analysis and visualization of teh variables, fo rexample, inside each ethnicity group, the distribution of the our main variables - mortality, intervention (mechanical ventilation, renal replacement therapy, and vasopressor). But we need some data transofmration first:
+
+```{r}
+### we first do some data transformation, we will explain them in the next texts
+data_EDA <- data |>
+  mutate(vent_hr = ifelse(is.na(InvasiveVent_hr), 0, InvasiveVent_hr)) |>
+  mutate(vent = ifelse(vent_hr > 0, 1, 0)) |>
+  mutate(vp = ifelse(pressor == "true", 1, 0)) |>
+  mutate(rrt = !is.na(rrt)) |>
+  mutate(death_int = ifelse(hospital_expire_flag == 1 | discharge_location == "HOSPICE", 1, 
+                            ifelse(discharge_location == "", NaN, 0)))
+
+
+```
+
+From the MIMIC documentation and the explanation of the raw data, I realized that some of the variables needed adjustments to make them more useful for analysis. For instance, the variable "InvasiveVent_hr" represents the number of hours a patient was on invasive ventilation, but it has missing values for patients who never required ventilation. From experience, I know that leaving these missing values as they are might confuse the analysis, so I decided to set them to "0". This makes it clear that these patients did not receive invasive ventilation. I also created a new variable, "vent", to indicate whether ventilation was used, assigning "1" if hours were greater than "0" and "0" otherwise. This binary variable simplifies understanding of whether a patient received ventilation at all.
+
+The "pressor" variable indicates whether vasopressors were administered, which is crucial for understanding the intensity of treatment. Based on the raw data and documentation, I found that this variable is recorded as "true" or "false." To streamline this for analysis, I created a new variable, "vp", to represent vasopressor use as a binary value: "1" for "true" and "0" otherwise. This transformation makes it easier to analyze how vasopressor use correlates with other clinical outcomes.
+
+For renal replacement therapy ("rrt"), I used my experience working with similar datasets to identify whether this treatment was administered. The presence or absence of data for "rrt" directly indicates whether the therapy was used, so I created a logical variable that marks it as "TRUE" if data exists and "FALSE" otherwise. This approach aligns with common practices when dealing with such variables in medical datasets.
+
+The variable "death_int" is critical for understanding patient outcomes. From the MIMIC documentation, I know that "hospital_expire_flag" shows whether a patient passed away during their hospital stay, while "discharge_location" provides additional context, such as if the patient was discharged to hospice care. Combining these two variables, I created "death_int", which marks patients as deceased ("1") if they died in the hospital or were sent to hospice. If the "discharge_location" was blank, I set this value to "NaN", as it’s unclear. For all other cases, the value is "0". This approach ensures that patient mortality is captured as accurately as possible, based on the available data.
+
+By making these adjustments, I think the dataset is better prepared for exploratory data analysis and downstream modeling, reflecting both the information in the MIMIC dataset and practical considerations for handling medical data.
+
+After we do some basic data transformation, we can do more EDA. For example, let us first compare the moratlity rate inside those race groups. Please notice in the further analysis we will only compare WHITE veresus nonwhite, but here we try to check the visualiztaion and distribution of all the races, just for EDA and check - hope we will see some interesting results.
+
+```{r}
+### 
+
+data_EDA_summary <- data_EDA |>
+  group_by(ethnicity) |>
+  summarise(
+    total_people = n(),
+    mortality_people = sum(death_int, na.rm = TRUE),
+    mortality_rate = (mortality_people / total_people) * 100
+  )
+
+ggplot(data_EDA_summary, aes(x = ethnicity)) +
+  geom_bar(aes(y = total_people, fill = "Total People"), stat = "identity", position = "identity", alpha = 0.7, color = "black") +
+  geom_bar(aes(y = mortality_people, fill = "Mortality/Death"), stat = "identity", position = "identity", alpha = 1, color = "black") +
+  geom_text(
+    aes(y = total_people, label = paste0(round(mortality_rate, 1), "%")),
+    vjust = -0.3, size = 4, fontface = "bold", color = "black"
+  ) +
+  labs(
+    title = "Mortality Rates by Ethnicity (Bar Plot)",
+    x = "Ethnicity",
+    y = "Count",
+    fill = "Group",
+    caption = "Data source: MIMIC-IV"
+  ) +
+  scale_fill_manual(values = c("Total People" = "skyblue3", "Mortality/Death" = "tomato3")) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title.x = element_text(face = "bold", size = 14),
+    axis.title.y = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(face = "bold"),
+    panel.grid.major = element_line(color = "gray85", linetype = "dashed"),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))
+
+```
+
+We can see that the mortality rate among "White" patients is 16.5%, while "Asian" patients have the highest mortality rate at 18.7%. For "Black" patients, the rate is 17.1%, and for "Hispanic" patients, it is 14.7%. However, due to the small sample size for "Alaska Native" patients—only 61 individuals—we may think that their mortality rate of 11.5% is not reliable or comparable. Further comparisons and statistical significance, such as p-values, can be explored later. Overall, the mortality rates across different racial groups appear to be relatively similar and average.
+
+Next we comapre the interventions usage rate inside the race groups.
+
+```{r}
+### 
+data_EDA_summary <- data_EDA |>
+  group_by(ethnicity) |>
+  summarise(
+    total_people = n(),
+    rrt_people = sum(rrt, na.rm = TRUE),
+    rrt_rate = (rrt_people / total_people) * 100
+  )
+
+ggplot(data_EDA_summary, aes(x = ethnicity)) +
+  geom_bar(aes(y = total_people, fill = "Total People"), stat = "identity", position = "identity", alpha = 0.7, color = "black") +
+  geom_bar(aes(y = rrt_people, fill = "RRT Usage"), stat = "identity", position = "identity", alpha = 1, color = "black") +
+  geom_text(
+    aes(y = total_people, label = paste0(round(rrt_rate, 1), "%")),
+    vjust = -0.3, size = 4, fontface = "bold", color = "black"
+  ) +
+  labs(
+    title = "RRT Usage Rates by Ethnicity (Bar Plot)",
+    x = "Ethnicity",
+    y = "Count",
+    fill = "Group",
+    caption = "Data source: MIMIC-IV"
+  ) +
+  scale_fill_manual(values = c("Total People" = "skyblue3", "RRT Usage" = "tomato3")) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title.x = element_text(face = "bold", size = 14),
+    axis.title.y = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(face = "bold"),
+    panel.grid.major = element_line(color = "gray85", linetype = "dashed"),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))
+
+```
+
+However, unlike the relatively similar distribution in mortality rates between different race and ethnicity groups—refer to the previous code block—we observe a significant and large difference in the usage of "RRT" (renal replacement therapy) across these groups. For example, among "White" individuals, the usage rate of "RRT" is only 8.44%, whereas all other groups show notably higher usage rates: "Asian" at 10.6%, "Black" at 18.6%, and "Hispanic" at 13%. These findings highlight a clear disparity in "RRT" usage between "White" individuals and other groups.
+
+It’s important to note that this observation comes directly from the raw data. This means we haven’t accounted for any potential confounders or applied any statistical models to explain this disparity. The percentages are simple comparisons based on raw data without adjustments. Later, in the logistic regression model, we will assess whether this significant statistical finding persists after controlling for potential confounders. For instance, if "White" individuals in the dataset are, on average, younger than patients from other racial or ethnic groups, the lower usage of "RRT" might be explained by age differences. This is just one example to illustrate the importance of further investigation. We will need to conduct more detailed analyses to fully understand these disparities and their underlying causes.
+
+Hence, now we build the descriptive statstics table (Table 1) and then we will do the logistic regreesion. Like what we did in the EDA analysis. We will first do some data transfomration. 
+
+```{r}
+### 
+sepsis_data <- data |>
+  mutate(Male = ifelse(gender == "M",1,0))|>
+  mutate(age_int = admission_age)|>
+  mutate(age_cat = ifelse(age_int >= 18 & age_int <= 34, "18 - 34",
+                          ifelse(age_int >= 35 & age_int <= 44, "35 - 44",
+                                 ifelse(age_int >= 45 & age_int <= 64, "45 - 64",
+                                        ifelse(age_int >= 65 & age_int <= 74, "65 - 74",
+                                               ifelse(age_int >= 75 & age_int <= 84, "75 - 84", "85 and above"))))))|>
+  mutate(vent_hr = ifelse(is.na(InvasiveVent_hr),0, InvasiveVent_hr))|>
+  
+  mutate(vent = ifelse(vent_hr > 0, 1, 0))|>
+  mutate(vp = ifelse(pressor == "true", 1, 0))|>
+  mutate(renal = !is.na(data$rrt))|>
+  mutate(year = anchor_year_group)|>
+  mutate(white = ifelse(ethnicity == "WHITE", "WHITE", "Non-WHITE"))|>
+  mutate(cci_int = charlson_comorbidity_index)|>
+  mutate(cci_cat = ifelse(cci_int >= 0 & cci_int <= 5, "0 - 5",
+                          ifelse(cci_int >= 6 & cci_int <= 10, "6 - 10",
+                                 ifelse(cci_int >= 11 & cci_int <= 15, "11 - 15","16 and above"))))|>
+  mutate(death_int = ifelse(hospital_expire_flag == 1 | discharge_location == "HOSPICE" ,1, 
+                            ifelse(discharge_location == "", NaN, 0)))|>
+  mutate(death_cat = ifelse(hospital_expire_flag == 1,"Died in Hospital",
+                            ifelse(discharge_location == "HOSPICE" ,"Discharged to Hospice", "Alive")))|>
+  mutate(sofa_int=SOFA)|>
+  mutate(sofa_cat = ifelse(sofa_int >= 0 & sofa_int <= 3, "0 - 3",
+                           ifelse(sofa_int >= 4 & sofa_int <= 6, "4 - 6",
+                                  ifelse(sofa_int >= 7 & sofa_int <= 10, "7 - 10", "11 and above"))))
+
+
+```
+In the above code, except those variables we have already explained (please check the previous EDA section). The variable "death_cat" provides a more descriptive categorization of patient outcomes. From the MIMIC documentation and raw data, I observed that while "death_int" simplifies outcomes into binary values, this variable captures whether the patient "Died in Hospital," was "Discharged to Hospice," or remained "Alive." I think this can help distinguish between different types of critical outcomes more clearly.
+
+For the Sequential Organ Failure Assessment ("SOFA") score, I created the variable "sofa_int" to directly store the numeric SOFA score from the raw data. This was then categorized into "sofa_cat" to group patients by the severity of their SOFA scores: "0 - 3," "4 - 6," "7 - 10," and "11 and above." From experience, categorizing scores in this way is useful for comparing groups with different severity levels, as it aligns with how SOFA is often interpreted in clinical practice.
+
+By adding these variables, the dataset becomes more informative and ready for more detailed analysis of patient outcomes and organ failure severity. These additions enrich the clinical context provided by the data.
+
+Next, we can generate the descriptive statsitcis table. 
+
+```{r}
+### 
+table1(~ year + as.factor(Male)+as.factor(vent)+vent_hr+as.factor(renal)
+       +as.factor(vp)+cci_int+cci_cat+ death_cat + sofa_int + sofa_cat
+       | white, data=sepsis_data, render.missing=NULL,topclass="Rtable1-grid Rtable1-shade Rtable1-times")
+
+
+```
+Is this table 1 readable? No! All the rownames are directly from the data and not that readable.
+
+The table contains several row names that could be more intuitive and reader-friendly. Technical terms like "as.factor(Male)", "as.factor(vent)", and "as.factor(renal)" should be replaced with clearer labels like "Gender", "Ventilation Required (binary indicator)", and "Renal Replacement Therapy (binary indicator)". Similarly, "vp" could be renamed "Vasopressor Use (binary indicator)". For numeric variables like "vent_hr", "cci_int", and "sofa_int", labels such as "Ventilation Hours", "Charlson Comorbidity Index (raw score)", and "SOFA Score (raw)" would provide better clarity, while categorical variables like "cci_cat" and "sofa_cat" could be renamed to include "(categories)". Outcome-related labels like "death_cat" might be revised to "Patient Outcome (categories)". Additionally, group labels like "Non-WHITE" could benefit from a more neutral term, such as "Other Ethnicities", to ensure inclusivity. Lastly, adding brief descriptions to category ranges (e.g., "Low Comorbidity (0 - 5)") could enhance interpretability.
+
+Now, we modify our table 1.
+
+```{r}
+### 
+sepsis_data_1 <- sepsis_data |>
+  rename(
+    Anchor_Year = year,
+    Gender = Male,
+    Ventilation_Use = vent,
+    Ventilation_Hours = vent_hr,
+    Renal_Replacement_Therapy = renal,
+    Vasopressor_Use = vp,
+    Charlson_Comorbidity_Index = cci_int,
+    Charlson_Comorbidity_Categories = cci_cat,
+    Patient_Outcome = death_cat,
+    SOFA_Score = sofa_int,
+    SOFA_Score_Categories = sofa_cat,
+    Ethnicity = white
+  )
+
+sepsis_data_1 <- sepsis_data_1 |>
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
+
+sepsis_data_1 <- sepsis_data_1 |>
+  mutate(Vasopressor_Use = factor(Vasopressor_Use, levels = c(0, 1), labels = c("No", "Yes")))
+
+sepsis_data_1 <- sepsis_data_1 |>
+  mutate(Ventilation_Use = factor(Ventilation_Use, levels = c(0, 1), labels = c("No", "Yes")))
+
+#sepsis_data_1 <- sepsis_data_1 |>
+#  mutate(Renal_Replacement_Therapy = factor(Renal_Replacement_Therapy, #levels = c('No', 'Yes'), labels = c("No", "Yes")))
+
+sepsis_data_1 <- sepsis_data_1 |>
+  mutate(SOFA_Score_Categories = factor(SOFA_Score_Categories, 
+                                        levels = c("0 - 3", "4 - 6", "7 - 10", "11 and above")))
+
+sepsis_data_1 <- sepsis_data_1 |>
+  mutate(Charlson_Comorbidity_Categories = factor(Charlson_Comorbidity_Categories, 
+                                                  levels = c("0 - 5", "6 - 10", "11 - 15", "16 and above")))
+
+
+
+
+table1(~ Anchor_Year +
+       Gender +
+       Ventilation_Use +
+       Ventilation_Hours +
+       Renal_Replacement_Therapy +
+       Vasopressor_Use +
+       Charlson_Comorbidity_Index +
+       Charlson_Comorbidity_Categories +
+       Patient_Outcome +
+       SOFA_Score +
+       SOFA_Score_Categories
+       | Ethnicity, 
+       data = sepsis_data_1, 
+       render.missing = NULL, 
+       topclass = "Rtable1-grid Rtable1-shade Rtable1-times")
+```
+We finally fix the issues and now the table 1 for descriptive statistcs is claer and more formal and more beautiful. 
+
+We can summarize some finding from the table 1. An analysis of Table 1 indicates that Non-WHITE patients present with higher severity of illness and exhibit disparities in treatment compared to WHITE patients. Non-WHITE individuals have slightly higher mean scores on both the Charlson Comorbidity Index (CCI) (6.31 vs. 6.07) and the SOFA score (6.79 vs. 6.37), suggesting a greater burden of chronic diseases and organ dysfunction upon admission. In terms of treatment, Non-WHITE patients are more likely to receive renal replacement therapy (16.0% vs. 8.4%) and have longer mean ventilation hours (30.2 vs. 26.0 hours), indicating a need for more intensive care. Conversely, they have a lower usage of vasopressors (44.2% vs. 51.9%) compared to WHITE patients. These disparities highlight potential differences in both the severity of conditions and the medical interventions provided between the two groups.
+
+
+Now, we save the data into a new data file (after the transofmration). The reason we need to save a new one since we do not know in the future analysis whether we will change the transofmration plan(for example, regroup the SOFA or CCI scores into new clinical-defined thresholds and groups), so we have two intermediate data saved (from raw to cleaned, from cleaned to transformed).
+
+```{r}
+### 
+
+write.csv(sepsis_data, "data/MIMIC_transformed.csv", row.names = FALSE)
+
+```
+
+There will be a new section, focus more on the logistic regreesion. 
+
+Logistic regression is a statistical method used for modeling binary outcomes (in our case, the mortality) based on one or more predictor variables. Unlike linear regression, which predicts continuous outcomes, logistic regression predicts the probability of an event occurring, such as survival or death, represented as a binary variable (e.g., 0 or 1). The model uses the logistic function, or sigmoid curve, to transform linear combinations of predictors into probabilities bounded between 0 and 1. Logistic regression assumes a linear relationship between the predictors and the log-odds of the outcome, making it effective for interpreting the influence of predictors. based on the lecture we get from this course we pick this model and in practise Its simplicity, interpretability, and efficiency make it a fundamental tool in statistics and machine learning.
+
+We first clean all the current variables and re-read the transformed csv file.
+
+```{r}
+### 
+rm(list = ls())
+sepsis_data = read.csv("data/MIMIC_transformed.csv")
+
+```
+
+now, Losgitic reghresion model, the first model we choose is relationship between the usage of RRT (renal replacement therapy) and race/ethnicity (White versus non-white) since in the descriptive statsitcs table one it is the most sifgniciant difference (16.0% in non-WHITE group vs. 8.4% in WHITE group), the confounder we add is: sex, CCI score, SOFA score, age, and the usage of other two interventions (vasopressor and ventilation)
+
+```{r}
+### 
+
+lr_model <- glm(
+  formula = as.factor(renal) ~ white + as.factor(Male) + cci_int  + 
+    sofa_int + as.factor(vp) + as.factor(vent) + admission_age,
+  data = sepsis_data,
+  family = binomial(link = "logit") # Logistic regression
+)
+
+summary(lr_model)
+```
+From the results above (the summary table from the logsitcial regressio model), the main vairable we are focusing in, the usag eof RRT is significant(pa vleus significant). If we choose 0.05 as the threshold, the only unsignificant p-value is the Sex (Female versus Male). 
+
+The odds ratio (OR) is a statistical measure used to quantify the strength of association between two events, typically in binary outcomes. It compares the odds of an event occurring in one group to another, with OR > 1 indicating increased odds, OR < 1 decreased odds, and OR = 1 no association.
+
+Next step, we analyze the odds ratio and the 95% CI, and compare with the value 1 (if odds ratio greater than 1, then...)
+
+
+```{r}
+### 
+
+
+coef_summary <- summary(lr_model)$coefficients
+coef_white <- coef_summary["whiteWHITE", "Estimate"]
+se_white <- coef_summary["whiteWHITE", "Std. Error"]
+
+
+odds_ratio_white <- exp(coef_white)
+ci_lower <- exp(coef_white - 1.96 * se_white)
+ci_upper <- exp(coef_white + 1.96 * se_white)
+
+odds_ratio_white
+ci_lower
+ci_upper
+
+
+```
+From the calculation, the odds ratio is 0.58 (0.52-0.65). Scince the baseline is non-WHITE group. We have the conclusion, the White group have significant less chance to get the intervention of RRT(renal replaemnet therapy), and it support what we find in the table 1 (16.0% in non-WHITE group vs. 8.4% in WHITE group). This result come from our Logistic regressioni model and it add more confonuder, so it is more accurate and reasonable. 
+
+Next we save our odds ratio result. And continue do more round of logistic regreesion for other two kinds of intervention - we will regroup and integrate all the results and have a more systematic comparsion in teh Result section . 
+```{r}
+### 
+RRT <- list(
+  Odds_Ratio = odds_ratio_white,
+  CI_Lower = ci_lower,
+  CI_Upper = ci_upper
+)
+```
+
+We also want check the multicolinearity in the LR model, use VIF values, and quick test a interation item inside. 
+
+```{r}
+### 
+library(car)
+
+vif_values <- vif(lr_model)
+
+print(vif_values)
+
+
+lr_model_interaction <- glm(
+  as.factor(renal) ~ white + admission_age + as.factor(Male) + cci_int + 
+    cci_cat + sofa_int + sofa_cat + as.factor(vent) + 
+    as.factor(vp) + sofa_int * as.factor(vent),
+  data = sepsis_data,
+  family = binomial(link = "logit")
+)
+
+summary(lr_model_interaction)
+```
+The Variance Inflation Factor (VIF) values in our model range between 1 and 2, indicating low multicollinearity among the predictor variables. This range suggests that the model's estimates are stable, reliable, and not significantly influenced by inter-variable correlations, enhancing interpretability and accuracy.
+
+We also evaluate an interaction term, which is typically informed by medical knowledge, within the logistic regression model. In this case, we examine the interaction between the SOFA score and the use of mechanical ventilation, as these factors may jointly influence patient outcomes, providing deeper insights into their combined effects. The results are not sifgnicincatly change between the original model, We will not add interaction terms in the later analysis. 
+
+
+
+
+
+Next, we do more round of LR model for the other two interventions. 
+
+
+```{r}
+### 
+lr_model <- glm(
+  formula = as.factor(vp) ~ white + as.factor(Male) + cci_int  + 
+    sofa_int + as.factor(renal) + as.factor(vent) + admission_age,
+  data = sepsis_data,
+  family = binomial(link = "logit") # Logistic regression
+)
+
+coef_summary <- summary(lr_model)$coefficients
+coef_white <- coef_summary["whiteWHITE", "Estimate"]
+se_white <- coef_summary["whiteWHITE", "Std. Error"]
+
+
+odds_ratio_white <- exp(coef_white)
+ci_lower <- exp(coef_white - 1.96 * se_white)
+ci_upper <- exp(coef_white + 1.96 * se_white)
+
+VP <- list(
+  Odds_Ratio = odds_ratio_white,
+  CI_Lower = ci_lower,
+  CI_Upper = ci_upper
+)
+
+```
+
+```{r}
+### 
+lr_model <- glm(
+  formula = as.factor(vent) ~ white + as.factor(Male) + cci_int  + 
+    sofa_int + as.factor(renal) + as.factor(vp) + admission_age,
+  data = sepsis_data,
+  family = binomial(link = "logit") # Logistic regression
+)
+
+coef_summary <- summary(lr_model)$coefficients
+coef_white <- coef_summary["whiteWHITE", "Estimate"]
+se_white <- coef_summary["whiteWHITE", "Std. Error"]
+
+
+odds_ratio_white <- exp(coef_white)
+ci_lower <- exp(coef_white - 1.96 * se_white)
+ci_upper <- exp(coef_white + 1.96 * se_white)
+
+Vent <- list(
+  Odds_Ratio = odds_ratio_white,
+  CI_Lower = ci_lower,
+  CI_Upper = ci_upper
+)
+```
+
+The mortality is closely related to the patient severity, in our study, we use SOFA score to regroup and do further analysis. Also, the usage of intervention is closed to the patient severity, for example, the RRT will be used for patients with dysfunction organ failure in renal. 
+
+The Sequential Organ Failure Assessment (SOFA) score is a clinical tool used to assess the extent of organ dysfunction in critically ill patients, particularly those with sepsis. It evaluates six organ systems: respiratory, cardiovascular, hepatic, coagulation, renal, and neurological, assigning a score from 0 (normal function) to 4 (severe dysfunction) for each system. The total SOFA score helps predict patient outcomes, with higher scores indicating greater severity and risk of mortality. It is widely used in intensive care units (ICUs) for monitoring disease progression, guiding treatment decisions, and comparing patient outcomes in clinical studies. The SOFA score is objective, reproducible, and essential for assessing critical illness.
+
+Based on the clinicl expeirnece, we split the SOFA scores into four groups (see table 1) 0 - 3, 4 - 6	, 7 - 10, 11 and above. And we redo the LR anlayssi inside those groups (we are aiming to answer: under siumilar severity patients, whether the usage of intervention and mortality inside different race and ethcniity group is still related )
+
+
+```{r}
+### 
+
+sepsis_split <- split(sepsis_data, sepsis_data$sofa_cat)
+sepsis_split_0_3 <- sepsis_split[["0 - 3"]]
+sepsis_split_4_6 <- sepsis_split[["4 - 6"]]
+sepsis_split_7_10 <- sepsis_split[["7 - 10"]]
+sepsis_split_11_above <- sepsis_split[["11 and above"]]
+
+
+```
+
+```{r}
+### 
+OR_df <- data.frame(
+  Group = c("RRT", "Vent", "VP"),
+  Odds_Ratio = c(RRT$Odds_Ratio, Vent$Odds_Ratio, VP$Odds_Ratio),
+  Lower = c(RRT$CI_Lower, Vent$CI_Lower, VP$CI_Lower),
+  Upper = c(RRT$CI_Upper, Vent$CI_Upper, VP$CI_Upper),
+  stringsAsFactors = FALSE
+)
+
+rownames(OR_df) <- OR_df$Group
+OR_df$Group <- NULL 
+
+OR_df
+```
+
+
+
+```{r}
+### RRT in split groups
+for (category in names(sepsis_split)) {
+  subset_data <- sepsis_split[[category]]
+  lr_model <- glm(
+  formula = as.factor(renal) ~ white + as.factor(Male) + cci_int  + 
+    sofa_int + as.factor(vent) + as.factor(vp) + admission_age,
+  data = subset_data,
+  family = binomial(link = "logit") # Logistic regression
+)
+  
+  coef_summary <- summary(lr_model)$coefficients
+  coef_white <- coef_summary["whiteWHITE", "Estimate"]
+  se_white <- coef_summary["whiteWHITE", "Std. Error"]
+  
+  
+  odds_ratio_white <- exp(coef_white)
+  ci_lower <- exp(coef_white - 1.96 * se_white)
+  ci_upper <- exp(coef_white + 1.96 * se_white)
+  
+  OR_df <- rbind(
+  OR_df,
+  data.frame(
+      Odds_Ratio = odds_ratio_white,
+      Lower = ci_lower,
+      Upper = ci_upper
+    )
+  )
+  rownames(OR_df)[nrow(OR_df)] <- paste0("RRT", category)
+}
+
+### VP
+for (category in names(sepsis_split)) {
+  subset_data <- sepsis_split[[category]]
+  lr_model <- glm(
+  formula = as.factor(vp) ~ white + as.factor(Male) + cci_int  + 
+    sofa_int + as.factor(vent) + as.factor(renal) + admission_age,
+  data = subset_data,
+  family = binomial(link = "logit") # Logistic regression
+)
+  
+  coef_summary <- summary(lr_model)$coefficients
+  coef_white <- coef_summary["whiteWHITE", "Estimate"]
+  se_white <- coef_summary["whiteWHITE", "Std. Error"]
+  
+  
+  odds_ratio_white <- exp(coef_white)
+  ci_lower <- exp(coef_white - 1.96 * se_white)
+  ci_upper <- exp(coef_white + 1.96 * se_white)
+  
+  OR_df <- rbind(
+  OR_df,
+  data.frame(
+      Odds_Ratio = odds_ratio_white,
+      Lower = ci_lower,
+      Upper = ci_upper
+    )
+  )
+  rownames(OR_df)[nrow(OR_df)] <- paste0("VP", category)
+}
+
+### Ventilation
+for (category in names(sepsis_split)) {
+  subset_data <- sepsis_split[[category]]
+  lr_model <- glm(
+  formula = as.factor(vent) ~ white + as.factor(Male) + cci_int  + 
+    sofa_int + as.factor(vp) + as.factor(renal) + admission_age,
+  data = subset_data,
+  family = binomial(link = "logit") # Logistic regression
+)
+  
+  coef_summary <- summary(lr_model)$coefficients
+  coef_white <- coef_summary["whiteWHITE", "Estimate"]
+  se_white <- coef_summary["whiteWHITE", "Std. Error"]
+  
+  
+  odds_ratio_white <- exp(coef_white)
+  ci_lower <- exp(coef_white - 1.96 * se_white)
+  ci_upper <- exp(coef_white + 1.96 * se_white)
+  
+  OR_df <- rbind(
+  OR_df,
+  data.frame(
+      Odds_Ratio = odds_ratio_white,
+      Lower = ci_lower,
+      Upper = ci_upper
+    )
+  )
+  rownames(OR_df)[nrow(OR_df)] <- paste0("Vent", category)
+}
+
+```
+
+```{r}
+### 
+OR_df
+```
+We will further anlayze this table - with more beauiful and transformation of this initial table in the result section.
+
+That is the end of th elogistic regression part.
+
+Our next part is the TMLE/ATE side. 
+
+Previously, we focused on investigating inequalities between “ethnicities” (X) and the “usage of interventions” (Y), exploring whether disparities exist in how medical interventions are allocated across different ethnic groups. Now, we shift our focus to examining the relationship between the “usage of interventions” (new X) and “mortality” (new Y). Specifically, we aim to determine whether the use of critical interventions—mechanical ventilation (MV), renal replacement therapy (RRT), and vasopressors (VP)—reduces the risk of mortality. Can we use another logistic regression model to address this question? Unfortunately, no. Logistic regression is useful for addressing associative questions, such as “Are intervention usage and mortality related?” However, it does not establish causation or reveal whether the intervention directly impacts mortality outcomes. This limitation arises because patients requiring interventions are already at higher baseline risk, meaning the observed relationships might reflect pre-existing differences rather than causal effects. Establishing causality requires alternative analytical approaches.
+
+Hence, to investigate the causal effects and relationships, we need to employ more advanced causal inference methods. These methods help disentangle causation from mere association by accounting for confounding variables and biases that affect observational data.
+
+The method we use in casual inference is TMLE: Targeted Maximum Likelihood Estimation (TMLE) is a robust causal inference method that integrates machine learning with statistical theory. It estimates causal effects by reducing bias and improving efficiency, making it suitable for complex observational data and intervention analysis.
+
+The final result we are looking for is ATE: The Average Treatment Effect (ATE) quantifies the average difference in outcomes between treated and untreated groups in a population (in our case, those people who get the intervention - VP, RRT, and MV versus those people whod o not get the intervention). It measures the causal impact of an intervention by comparing expected outcomes, accounting for confounding variables. ATE is central in causal inference to evaluate treatment efficacy and inform decision-making.
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
+
+
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
+
+```{r}
+### 
+
+```
 ## Results {#sec-results}
 
 Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
 
+### Figure 1 and EDA are mainly in the Method, many visualization we will not repeat
+
+### The result for the logistic regression, literature reviw find some WHITE usage of RRT, for example,
+
+### The result for the TMLE/ATE
+
+### Discussion
+
+Some discussion here,
+
 ## Conclusion
 
 This the conclusion. The @sec-results can be invoked here.
+
+## Acknowledgement
+
+dr dr ta ta lec 456789
+
+## Reference
